@@ -4,47 +4,53 @@ Dashboard multi-tenant para gestión de proyectos construido con Next.js 16 (App
 
 ## 🚀 Demo
 
-- **Demo URL**: [Deployed on Vercel](#)
+- **Demo URL**: [Deployed on Vercel](https://prueba-tecnica-nextjs-three.vercel.app)
 - **Tenants disponibles**:
-  - `/acme/dashboard` - Acme Corporation
-  - `/umbrella/dashboard` - Umbrella Corporation
+  - `/acme/dashboard` - Acme Corporation (Single Tenant)
+  - `/umbrella/dashboard` - Umbrella Corporation (Single Tenant)
+  - `/acme+umbrella/dashboard` - Multi Tenant View (Separado por `+`)
+  - `/acme,umbrella/dashboard` - Multi Tenant View (Separado por `,`)
 
 ## 📋 Decisiones Técnicas Clave
 
-### 1. Arquitectura Multi-Tenant
+### 1. Arquitectura Multi-Tenant y Routing Dinámico
 
-**Decisión**: Aislamiento completo de datos por tenant a nivel de repositorio.
+**Decisión**: Aislamiento de datos por tenant y soporte para vistas agregadas multi-tenant.
 
 **Implementación**:
-- Cada tenant se identifica por su slug en la URL (`/[tenant]/...`)
-- Validación del tenant en el layout padre (`src/app/[tenant]/layout.tsx`)
-- El Patrón Repository valida que cada query incluya el `tenantId`
-- Los datos mock están estructurados en un `Record<string, Project[]>` indexado por tenant
+- **Rutas Dinámicas**: `src/app/[tenants]/...` captura uno o más tenants.
+- **Parsing Robusto**:
+  - Soporte para separadores `+` y `,` (ej. `/acme+umbrella` o `/acme,umbrella`).
+  - Manejo de URL encoding (`%2B`, `%2C`) para asegurar compatibilidad con todos los navegadores.
+- **Validación**:
+  - Verificación de existencia para cada tenant especificado en la URL.
+  - Retorno de 404 si algún tenant no existe.
+- **Contexto**:
+  - El layout (`src/app/[tenants]/layout.tsx`) inyecta el contexto multi-tenant.
+  - La navegación ("Back to Projects") maneja la decodificación de la URL original.
 
 **Beneficios**:
-- Seguridad: imposible acceder a datos de otro tenant
-- Escalabilidad: fácil migrar a base de datos con cláusulas WHERE por tenant
-- Testeable: cada tenant es una unidad aislada
+- **Flexibilidad**: Los usuarios pueden ver datos de una sola organización o comparar múltiples organizaciones en una sola vista.
+- **UX**: Navegación fluida y URLs compartibles y legibles.
 
 ### 2. Server vs Client Components
 
 **Estrategia clara de separación**:
 
 **Server Components** (sin `'use client'`):
-- `src/app/[tenant]/layout.tsx` - Validación y fetching de tenant
-- `src/app/[tenant]/dashboard/page.tsx` - Fetching de estadísticas
-- `src/app/[tenant]/projects/page.tsx` - Fetching de proyectos
-- `src/app/[tenant]/projects/[id]/page.tsx` - Fetching de proyecto individual
-- `src/ui/components/dashboard-stats.tsx` - Componente puramente visual
+- `src/app/[tenants]/layout.tsx`: Validación de tenants y estructura general.
+- `src/app/[tenants]/dashboard/page.tsx`: Agregación de estadísticas de múltiples tenants.
+- `src/app/[tenants]/projects/page.tsx`: Listado de proyectos agrupados por tenant.
+- `src/app/[tenants]/projects/[id]/page.tsx`: Detalle de proyecto con búsqueda contextual.
+- `src/ui/components/dashboard-stats.tsx`: Presentación de métricas.
 
 **Client Components** (con `'use client'`):
-- `src/ui/components/project-list.tsx` - Filtrado interactivo
-- `src/ui/components/project-card.tsx` - Navegación con stados de hover
+- `src/ui/components/project-list.tsx`: Filtrado interactivo (Active/Archived) sin recarga.
+- `src/ui/components/project-card.tsx`: Tarjeta interactiva con navegación.
 
 **Razón**:
-- Fetching en servidor = mejor SEO, menos JavaScript en el cliente
-- Interactividad en cliente = mejor UX sin recargas
-- Los Server Components pasan datos serializables a Client Components
+- Optimización de carga inicial y SEO con Server Components.
+- Interactividad rica en el cliente donde es necesario (filtros).
 
 ### 3. Arquitectura por Capas (DDD-inspired + Functional Programming)
 
@@ -53,123 +59,65 @@ src/
 ├── core/
 │   ├── domain/
 │   │   ├── entities/        # Entidades (tipos)
-│   │   ├── logic/           # Funciones puras (lógica de negocio)
+│   │   ├── logic/           # Funciones puras (parsing, cálculos)
 │   │   └── repositories/    # Interfaces
 │   └── application/
-│       └── use-cases/       # Use Cases (orquestación)
+│       └── use-cases/       # Use Cases (orquestación multi-tenant)
 ├── infrastructure/          # Implementaciones concretas (mock data, repositories)
-└── ui/                      # Componentes de presentación
+└── ui/components            # Componentes de presentación
 ```
 
 **Beneficios**:
-- **Dominio independiente**: Las entidades no dependen de nada
-- **Funciones puras**: Toda la lógica de negocio es testeable sin mocks
-- **Use Cases**: Orquestación clara y separada de la lógica pura
-- **Intercambiable**: Cambiar de mock a DB real solamente requiere cambiar la capa de infraestructura
-- **Escalable**: Cada capa tiene una responsabilidad única
+- **Lógica de Negocio Pura**: Funciones como `parseTenantSlug` o `calculateMultiTenantStats` son puras y fáciles de testear.
+- **Casos de Uso Claros**: `getMultiTenantStats` encapsula la complejidad de agregar datos de múltiples fuentes.
+- **Independencia**: La UI no conoce la procedencia de los datos.
 
 ### 4. Patrones de Diseño Aplicados
 
 #### Repository Pattern
 ```typescript
-// Interface en dominio
 interface IProjectRepository {
-  findByTenantId(tenantId: string): Promise<Project[]>;
+  findByTenantIds(tenantIds: string[]): Promise<Map<string, Project[]>>;
   findByIdAndTenant(id: string, tenantId: string): Promise<Project | null>;
-}
-
-// Implementación en infraestructura
-class MockProjectRepository implements IProjectRepository { ... }
-```
-
-**Ventaja**: Desacopla la lógica de negocio del almacenamiento de datos.
-
-#### Use Cases + Pure Functions Pattern
-
-**Funciones puras en el dominio**:
-```typescript
-// src/core/domain/logic/count-projects-by-status.ts
-export function countProjectsByStatus(
-  projects: Project[],
-  status: ProjectStatus
-): number {
-  return projects.filter((p) => p.status === status).length;
-}
-
-// src/core/domain/logic/calculate-dashboard-stats.ts
-export function calculateDashboardStats(projects: Project[]): DashboardStats {
-  return {
-    totalProjects: projects.length,
-    activeProjects: countProjectsByStatus(projects, 'active'),
-    archivedProjects: countProjectsByStatus(projects, 'archived'),
-  };
+  // ...
 }
 ```
+**Ventaja**: Permite cambiar la fuente de datos (Mock vs DB) sin tocar la lógica de negocio ni la UI.
 
-**Use Cases en la capa de aplicación** (orquestación):
-```typescript
-// src/core/application/use-cases/get-dashboard-stats.ts
-export async function getDashboardStats(
-  repository: IProjectRepository,
-  tenantId: string
-): Promise<DashboardStats> {
-  const projects = await repository.findByTenantId(tenantId);
-  return calculateDashboardStats(projects); // Función pura
-}
-```
-
-**Ventajas**:
-- **Funciones puras = Tests triviales**: No necesitan mocks, solo input/output
-- **Composabilidad**: Las funciones puras se pueden combinar fácilmente
-- **Tree-shaking**: Solo importas lo que usas
+#### Use Cases (Orquestación)
+Los casos de uso manejan la lógica de coordinación. Por ejemplo, `getProjectById` ahora acepta múltiples `tenantIds` e itera para encontrar el proyecto en el contexto correcto, abstrayendo esta complejidad de la página.
 
 ## 🏗️ Estructura del Proyecto
 
 ```
 src/
 ├── app/
-│   ├── [tenant]/
-│   │   ├── layout.tsx              # Validación de tenant + navegación
+│   ├── [tenants]/                  # Ruta dinámica para 1 o N tenants
+│   │   ├── layout.tsx              # Layout compartido
 │   │   ├── dashboard/
-│   │   │   └── page.tsx            # Server Component - Dashboard
+│   │   │   └── page.tsx            # Dashboard Multi-Tenant
 │   │   └── projects/
-│   │       ├── page.tsx            # Server Component - Lista de proyectos
+│   │       ├── page.tsx            # Lista de Proyectos Multi-Tenant
 │   │       └── [id]/
-│   │           └── page.tsx        # Server Component - Detalle de proyecto
-│   ├── layout.tsx                  # Layout raíz
-│   └── page.tsx                    # Redirect a /acme/dashboard
+│   │           └── page.tsx        # Detalle de Proyecto
+│   ├── layout.tsx                  # Root Layout
+│   └── page.tsx                    # Redirect
 │
 ├── core/
 │   ├── domain/
-│   │   ├── entities/
-│   │   │   ├── tenant.ts           # Entity: Tenant
-│   │   │   └── project.ts          # Entity: Project
 │   │   ├── logic/
-│   │   │   ├── count-projects-by-status.ts     # Función pura
-│   │   │   ├── filter-projects-by-status.ts    # Función pura
-│   │   │   ├── calculate-dashboard-stats.ts    # Función pura
-│   │   │   └── index.ts            # Barrel export
-│   │   └── repositories/
-│   │       └── project-repository.interface.ts  # Interface del Repository
+│   │   │   ├── parse-tenant-slug.ts        # Lógica de parsing de URL
+│   │   │   ├── calculate-multi-tenant-stats.ts # Agregación de métricas
+│   │   │   └── ...
 │   └── application/
 │       └── use-cases/
-│           ├── get-projects-by-tenant.ts       # Use Case
-│           ├── get-project-by-id.ts            # Use Case
-│           ├── get-tenant-info.ts              # Use Case
-│           ├── get-dashboard-stats.ts          # Use Case
-│           └── index.ts            # Barrel export
+│           ├── get-multi-tenant-projects.ts
+│           ├── get-multi-tenant-stats.ts
+│           └── ...
 │
 ├── infrastructure/
-│   ├── data/
-│   │   └── mock-data.ts            # Datos mock por tenant
 │   └── repositories/
-│       └── mock-project.repository.ts  # Implementación del Repository
-│
-└── ui/
-    └── components/
-        ├── dashboard-stats.tsx     # Server Component - Estadísticas
-        ├── project-list.tsx        # Client Component - Lista con filtros
-        └── project-card.tsx        # Client Component - Tarjeta de proyecto
+│       └── mock-project.repository.ts  # Soporte para operaciones bulk/multi-tenant
 ```
 
 ## 🛠️ Tecnologías
@@ -179,7 +127,7 @@ src/
 - **Tailwind CSS 4**
 - **pnpm** (Package manager)
 
-## 🚀 Instalación y Ejecución (Require tener Pnpm instalado)
+## 🚀 Instalación y Ejecución (Requiere tener Pnpm instalado)
 
 ```bash
 # Instalar dependencias
@@ -195,162 +143,46 @@ pnpm build
 pnpm start
 ```
 
-Abrir [http://localhost:3000](http://localhost:3000) - redirigirá a `/acme/dashboard`.
+## 🔗 URLs y Navegación
 
-## 🔗 URLs Disponibles
+### Single Tenant
+- `/acme/dashboard`
+- `/umbrella/projects`
 
-### Tenant: Acme Corporation
-- `/acme/dashboard` - Dashboard con estadísticas
-- `/acme/projects` - Lista de proyectos (con filtros)
-- `/acme/projects/acme-1` - Detalle del proyecto "Website Redesign"
-- `/acme/projects/acme-2` - Detalle del proyecto "Mobile App Development"
-- `/acme/projects/acme-3` - Detalle del proyecto "Legacy System Migration"
+### Multi Tenant
+- `/acme+umbrella/dashboard`: Muestra tarjetas de estadísticas para ambos tenants.
+- `/acme,umbrella/projects`: Muestra listas de proyectos separadas para cada tenant.
+- **Navegación**: Al entrar al detalle de un proyecto desde una vista multi-tenant (ej. `/acme+umbrella/projects/p1`), el enlace "Back to Projects" mantiene el contexto (`/acme+umbrella/projects`), preservando la selección del usuario.
 
-### Tenant: Umbrella Corporation
-- `/umbrella/dashboard` - Dashboard con estadísticas
-- `/umbrella/projects` - Lista de proyectos
-- `/umbrella/projects/umbrella-1` - Detalle del proyecto "Research Platform"
-- `/umbrella/projects/umbrella-2` - Detalle del proyecto "Security Audit"
+## ✅ Funcionalidades Completadas
 
-### Validación de Seguridad
-- `/acme/projects/umbrella-1` - ❌ 404 (proyecto no pertenece al tenant)
-- `/invalid-tenant/dashboard` - ❌ 404 (tenant no existe)
+### Core
+- ✅ Soporte completo Multi-Tenant (Single & Multiple view).
+- ✅ Parsing avanzado de URLs (soporte `,`, `+`, `%2B`, `%2C`).
+- ✅ Aislamiento de datos garantizado por repositorio.
+- ✅ Dashboard con métricas agregadas.
+- ✅ Listado de proyectos con filtros en cliente.
+- ✅ Detalle de proyecto con resolución contextual de tenant.
 
-## ✅ Requisitos Cumplidos
+### Calidad de Código
+- ✅ Tipado estricto con TypeScript.
+- ✅ Arquitectura limpia (Clean Architecture).
+- ✅ Componentes modulares y reutilizables.
 
-### Funcionales
-- ✅ Multi-tenant con slug en URL (`/[tenant]/...`)
-- ✅ Aislamiento de datos por tenant
-- ✅ Dashboard con nombre del tenant y total de proyectos
-- ✅ Lista de proyectos con filtros (active/archived)
-- ✅ Detalle de proyecto con validación de tenant
-- ✅ Server Components para fetching
-- ✅ Client Components para interactividad
+## 🚫 Detalles Dejados de Lado Conscientemente
 
-### Arquitectónicos
-- ✅ Separación clara Server/Client Components
-- ✅ Patrón Repository
-- ✅ Use Cases + Pure Functions (Functional Programming)
-- ✅ Arquitectura en capas (Domain, Application, Infrastructure, UI)
-- ✅ Lógica de negocio 100% testeable sin mocks
-- ✅ Mock data fácilmente reemplazable
+Debido al alcance de la prueba técnica y para priorizar la solidez de la arquitectura multi-tenant, se omitieron deliberadamente los siguientes aspectos:
 
-### Deploy
-- ✅ Repositorio público en GitHub
-- ✅ Commits descriptivos
-- ✅ README con decisiones técnicas
-- 🔄 Deploy en Vercel (pendiente)
+1.  **CRUD Completo**: La aplicación es de solo lectura. No se implementó la creación, edición o eliminación de proyectos, ya que el foco estaba en la visualización aislada por tenant.
+2.  **Autenticación y Autorización**: Se asume que el `tenantId` en la URL es válido tras pasar el layout. En una aplicación real, se usaría un sistema como NextAuth.js para validar que el usuario pertenece efectivamente al tenant que intenta visualizar.
+3.  **Estética Avanzada y Gráficos**: Se utilizó un diseño limpio con Tailwind CSS 4, pero se evitaron bibliotecas de gráficos (como Recharts) o animaciones complejas para mantener el bundle ligero y centrarse en la lógica de negocio.
+4.  **Internacionalización (i18n)**: El contenido está mayoritariamente en inglés/español mixto (mock data), priorizando la funcionalidad sobre la localización completa.
+5.  **Paginación**: Dado que los datasets de prueba son pequeños, se optó por un listado simple en lugar de implementar paginación o infinite scroll.
+6. **Estados Globales**: Manejo de estados globales con Context API o Zustand y Persistencia para que conserve los estados modificados en caso de ser necesario.
 
-## 🎯 Qué Mejoraría con Más Tiempo
+## 🎯 Mejoras Futuras
 
-### 1. Testing
-- Unit tests para el Service Layer (lógica pura = fácil de testear)
-- Integration tests para el Repository
-- E2E tests con Playwright para flujos críticos
-
-### 2. Estado y Caché
-- React Server Components con `revalidate` para caché automático
-- Optimistic UI en filtros con `useOptimistic`
-- Suspense boundaries con loading states más granulares
-
-### 3. Seguridad
-- Middleware de Next.js para validación de tenant antes del rendering
-- Rate limiting por tenant
-- Autenticación real (NextAuth.js o similar)
-
-### 4. Performance
-- Lazy loading de componentes pesados
-- Image optimization para futuros assets
-- Implementar React Compiler (en Next.js 16)
-
-### 5. Developer Experience
-- ESLint rules custom para arquitectura (enforce layering)
-- Husky pre-commit hooks
-- CI/CD con tests automáticos
-- Storybook para componentes UI
-
-### 6. Base de Datos Real
-```typescript
-// Migración trivial gracias a Repository Pattern
-class PostgresProjectRepository implements IProjectRepository {
-  constructor(private db: PostgresClient) {}
-
-  async findByTenantId(tenantId: string): Promise<Project[]> {
-    return this.db.query(
-      'SELECT * FROM projects WHERE tenant_id = $1',
-      [tenantId]
-    );
-  }
-}
-
-// En la app, cambiar:
-// const repo = new MockProjectRepository();
-// por:
-// const repo = new PostgresProjectRepository(db);
-```
-
-## 🚫 Qué Conscientemente Dejé Fuera
-
-### 1. Estética Avanzada
-- Animaciones complejas (no requerido por la prueba)
-- Sistema de temas dinámico (dark mode ya configurado pero no usado)
-- Iconos customizados (usar SVGs inline en producción)
-
-### 2. Features de Producto
-- Crear/editar/eliminar proyectos (CRUD completo)
-- Búsqueda/ordenamiento avanzado
-- Paginación (los datasets de ejemplo son pequeños)
-- Dashboard con gráficas (Chart.js/Recharts)
-
-### 3. Internacionalización
-- i18n (no requerido, pero fácil de agregar con `next-intl`)
-
-### 4. Gestión de Estado Global
-- No necesario: Server Components + props es suficiente
-- En app real con auth: Context API o Zustand para sesiones de usuario
-
-### 5. Logging y Observabilidad
-- Sentry para tracking de errores
-- Analytics (Vercel Analytics / Google Analytics)
-- Performance monitoring
-
-### 6. Landing Page con algún tenant por defecto (Traído de una DB real)
-- No requerido por la prueba
-- El proyecto en sí deja un tenant por defecto: `/acme/dashboard`
-
-## 📝 Notas de Implementación
-
-### Por qué Mock con Latencia Simulada
-```typescript
-private async simulateDelay(): Promise<void> {
-  const delay = Math.random() * 100 + 50; // 50-150ms
-  return new Promise((resolve) => setTimeout(resolve, delay));
-}
-```
-**Razón**: Ayuda a identificar race conditions y mejora la experiencia de desarrollo al simular condiciones reales de red.
-
-### Por qué Funciones Puras en Domain Logic
-```typescript
-// src/core/domain/logic/count-projects-by-status.ts
-export function countProjectsByStatus(
-  projects: Project[],
-  status: ProjectStatus
-): number {
-  return projects.filter((p) => p.status === status).length;
-}
-```
-**Razón**: Fáciles de testear (sin mocks necesarios), predecibles, y componibles. Sin side effects = sin bugs ocultos. Separadas en archivos individuales para mejor organización y tree-shaking.
-
-### Por qué la interfaz Repository en Domain
-**Razón**: Dependency Inversion Principle (SOLID). El dominio define QUÉ necesita, la infraestructura implementa CÓMO lo obtiene.
-
-### Por qué Use Cases en lugar de Service Classes
-```typescript
-export async function getDashboardStats(
-  repository: IProjectRepository,
-  tenantId: string
-) { /* ... */ }
-// Uso: getDashboardStats(repository, tenantId)
-```
-
-**Razón**: Más simple, no hay estado oculto, no hay `this`, mejor para tree-shaking, alineado con la filosofía funcional de React.
+- **Persistencia Real**: Reemplazar `MockProjectRepository` con una implementación de PostgreSQL/Prisma.
+- **Autenticación**: Integrar NextAuth para proteger rutas privadas.
+- **UI/UX**: Añadir gráficos (Charts) al dashboard y mejorar transiciones.
+- **Testing**: Ampliar cobertura de tests unitarios y E2E.

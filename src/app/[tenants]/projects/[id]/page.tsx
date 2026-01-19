@@ -41,7 +41,7 @@ export default async function ProjectDetailPage({
         <div>
             <div className="mb-6">
                 <Link
-                    href={`/${tenants}/projects`}
+                    href={`/${decodeURIComponent(tenants)}/projects`}
                     className="text-blue-600 hover:text-blue-800 text-sm"
                 >
                     ← Back to Projects
