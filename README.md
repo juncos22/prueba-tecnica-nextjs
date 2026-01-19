@@ -180,6 +180,7 @@ Debido al alcance de la prueba técnica y para priorizar la solidez de la arquit
 4.  **Internacionalización (i18n)**: El contenido está mayoritariamente en inglés/español mixto (mock data), priorizando la funcionalidad sobre la localización completa.
 5.  **Paginación**: Dado que los datasets de prueba son pequeños, se optó por un listado simple en lugar de implementar paginación o infinite scroll.
 6. **Estados Globales**: Manejo de estados globales con Context API o Zustand y Persistencia para que conserve los estados modificados en caso de ser necesario.
+7. **LocalDB**: Manejo de una base de datos local basada en archivos JSON para organizar mejor la información mockeada.
 
 ## 🎯 Mejoras Futuras
 
@@ -187,3 +188,4 @@ Debido al alcance de la prueba técnica y para priorizar la solidez de la arquit
 - **Autenticación**: Integrar NextAuth para proteger rutas privadas.
 - **UI/UX**: Añadir gráficos (Charts) al dashboard y mejorar transiciones.
 - **Testing**: Ampliar cobertura de tests unitarios y E2E.
+- **Analytics**: Analíticas sobre rendimiento y usuarios que estén en el sitio (fácilmente implementable en Vercel).
