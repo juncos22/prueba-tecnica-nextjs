@@ -43,6 +43,23 @@ export class MockProjectRepository implements IProjectRepository {
   }
 
   /**
+   * Obtiene todos los proyectos de múltiples tenants
+   * Retorna un Map con tenantId como key y lista de proyectos como value
+   */
+  async findByTenantIds(tenantIds: string[]): Promise<Map<string, Project[]>> {
+    await this.simulateDelay();
+
+    const result = new Map<string, Project[]>();
+
+    tenantIds.forEach((tenantId) => {
+      const projects = PROJECTS[tenantId] ?? [];
+      result.set(tenantId, [...projects]);
+    });
+
+    return result;
+  }
+
+  /**
    * Obtiene información del tenant
    */
   async findTenantById(tenantId: string): Promise<Tenant | null> {
@@ -50,6 +67,25 @@ export class MockProjectRepository implements IProjectRepository {
 
     const tenant = TENANTS[tenantId];
     return tenant ? { ...tenant } : null;
+  }
+
+  /**
+   * Obtiene información de múltiples tenants por sus IDs
+   * Filtra tenants que no existen
+   */
+  async findTenantsByIds(tenantIds: string[]): Promise<Tenant[]> {
+    await this.simulateDelay();
+
+    const tenants: Tenant[] = [];
+
+    tenantIds.forEach((tenantId) => {
+      const tenant = TENANTS[tenantId];
+      if (tenant) {
+        tenants.push({ ...tenant });
+      }
+    });
+
+    return tenants;
   }
 
   /**

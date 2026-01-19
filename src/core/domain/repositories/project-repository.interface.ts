@@ -13,6 +13,11 @@ export interface IProjectRepository {
   findByTenantId(tenantId: string): Promise<Project[]>;
 
   /**
+   * Obtiene todos los proyectos de múltiples tenants
+   */
+  findByTenantIds(tenantIds: string[]): Promise<Map<string, Project[]>>;
+
+  /**
    * Obtiene un proyecto por ID y tenant
    * Valida que el proyecto pertenezca al tenant
    */
@@ -22,6 +27,11 @@ export interface IProjectRepository {
    * Obtiene información de un tenant por su ID
    */
   findTenantById(tenantId: string): Promise<Tenant | null>;
+
+  /**
+   * Obtiene información de múltiples tenants por sus IDs
+   */
+  findTenantsByIds(tenantIds: string[]): Promise<Tenant[]>;
 
   /**
    * Obtiene el conteo de proyectos por estado de un tenant

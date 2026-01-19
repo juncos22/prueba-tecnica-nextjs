@@ -8,3 +8,18 @@ export {
   calculateDashboardStats,
   type DashboardStats,
 } from './calculate-dashboard-stats';
+export {
+  parseTenantSlug,
+  createTenantSlug,
+  isMultiTenant,
+} from './parse-tenant-slug';
+export {
+  parseTenantSegments,
+  createTenantPath,
+  isMultiTenant as isMultiTenantSegments,
+} from './parse-tenant-segments';
+export { mergeProjectLists } from './merge-project-lists';
+export {
+  calculateMultiTenantStats,
+  type MultiTenantStats,
+} from './calculate-multi-tenant-stats';

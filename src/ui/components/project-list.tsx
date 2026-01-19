@@ -13,9 +13,10 @@ import { useState } from 'react';
 interface ProjectListProps {
   projects: Project[];
   tenantId: string;
+  tenantsSlug: string;
 }
 
-export function ProjectList({ projects, tenantId }: ProjectListProps) {
+export function ProjectList({ projects, tenantId, tenantsSlug }: ProjectListProps) {
   const [filter, setFilter] = useState<'all' | 'active' | 'archived'>('all');
 
   const filteredProjects =
@@ -65,6 +66,7 @@ export function ProjectList({ projects, tenantId }: ProjectListProps) {
               key={project.id}
               project={project}
               tenantId={tenantId}
+              tenantsSlug={tenantsSlug}
             />
           ))}
         </div>

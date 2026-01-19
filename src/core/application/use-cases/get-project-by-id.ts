@@ -8,7 +8,13 @@ import { IProjectRepository } from '@/core/domain/repositories/project-repositor
 export async function getProjectById(
   repository: IProjectRepository,
   projectId: string,
-  tenantId: string
+  tenantIds: string[]
 ): Promise<Project | null> {
-  return repository.findByIdAndTenant(projectId, tenantId);
+  for (const tenantId of tenantIds) {
+    const project = await repository.findByIdAndTenant(projectId, tenantId);
+    if (project) {
+      return project;
+    }
+  }
+  return null;
 }

@@ -11,9 +11,10 @@ import Link from 'next/link';
 interface ProjectCardProps {
   project: Project;
   tenantId: string;
+  tenantsSlug: string;
 }
 
-export function ProjectCard({ project, tenantId }: ProjectCardProps) {
+export function ProjectCard({ project, tenantsSlug }: ProjectCardProps) {
   const statusColor =
     project.status === 'active'
       ? 'bg-green-100 text-green-800'
@@ -21,7 +22,7 @@ export function ProjectCard({ project, tenantId }: ProjectCardProps) {
 
   return (
     <Link
-      href={`/${tenantId}/projects/${project.id}`}
+      href={`/${tenantsSlug}/projects/${project.id}`}
       className="block p-6 border border-gray-200 rounded-lg hover:shadow-lg transition-shadow"
     >
       <div className="flex justify-between items-start mb-2">
