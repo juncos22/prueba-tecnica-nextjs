@@ -4,7 +4,8 @@ Dashboard multi-tenant para gestión de proyectos construido con Next.js 16 (App
 
 ## 🚀 Demo
 
-- **Demo URL**: [Deployed on Vercel](https://prueba-tecnica-nextjs-three.vercel.app)
+- **Demo Vercel URL**: [Deploy en Vercel](https://prueba-tecnica-nextjs-three.vercel.app)
+- **Demo Netlify URL**: [Deploy en Netlify](https://prueba-tecnica-nextjs.netlify.app/)
 - **Tenants disponibles**:
   - `/acme/dashboard` - Acme Corporation (Single Tenant)
   - `/umbrella/dashboard` - Umbrella Corporation (Single Tenant)
