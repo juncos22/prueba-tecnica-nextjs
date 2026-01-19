@@ -314,6 +314,10 @@ class PostgresProjectRepository implements IProjectRepository {
 - Analytics (Vercel Analytics / Google Analytics)
 - Performance monitoring
 
+### 6. Landing Page con algún tenant por defecto (Traído de una DB real)
+- No requerido por la prueba
+- El proyecto en sí deja un tenant por defecto: `/acme/dashboard`
+
 ## 📝 Notas de Implementación
 
 ### Por qué Mock con Latencia Simulada
